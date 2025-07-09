@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <script>
+        // 重要：このAPIキーはサンプルです。必ずご自身のOpenAI APIキーに置き換えてください。
+    	const sessionApiKey = 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web会議 リアルタイム・ファイル文字起こしツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        #pushToTalkButton:active {
+            transform: scale(0.95);
+            background-color: #1e40af; /* A darker blue */
+        }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="flex h-screen">
+        <div class="w-1/3 bg-white p-6 overflow-y-auto flex flex-col space-y-6">
+            <header class="text-center">
+                <h1 class="text-2xl font-bold text-gray-900">Web会議 文字起こし</h1>
+                <p class="mt-1 text-sm text-gray-600">設定と操作</p>
+            </header>
+
+            <div class="space-y-4 border-b pb-6">
+                <h2 class="text-lg font-semibold text-gray-800">リアルタイム文字起こし</h2>
+
+                <div>
+                    <label for="languageSelect" class="block text-sm font-medium text-gray-700 mb-1">文字起こし言語</label>
+                    <select id="languageSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-200">
+                        <option value="ja" selected>日本語</option>
+                        <option value="en">英語</option>
+                        <option value="zh">中国語</option>
+                        <option value="es">スペイン語</option>
+                        <option value="fr">フランス語</option>
+                        <option value="de">ドイツ語</option>
+                        <option value="ko">韓国語</option>
+                        <option value="af">アフリカーンス語</option>
+                        <option value="ar">アラビア語</option>
+                        <option value="hy">アルメニア語</option>
+                        <option value="az">アゼルバイジャン語</option>
+                        <option value="be">ベラルーシ語</option>
+                        <option value="bs">ボスニア語</option>
+                        <option value="bg">ブルガリア語</option>
+                        <option value="ca">カタロニア語</option>
+                        <option value="hr">クロアチア語</option>
+                        <option value="cs">チェコ語</option>
+                        <option value="da">デンマーク語</option>
+                        <option value="nl">オランダ語</option>
+                        <option value="et">エストニア語</option>
+                        <option value="fi">フィンランド語</option>
+                        <option value="gl">ガリシア語</option>
+                        <option value="el">ギリシャ語</option>
+                        <option value="he">ヘブライ語</option>
+                        <option value="hi">ヒンディー語</option>
+                        <option value="hu">ハンガリー語</option>
+                        <option value="is">アイスランド語</option>
+                        <option value="id">インドネシア語</option>
+                        <option value="it">イタリア語</option>
+                        <option value="kn">カンナダ語</option>
+                        <option value="kk">カザフ語</option>
+                        <option value="lv">ラトビア語</option>
+                        <option value="lt">リトアニア語</option>
+                        <option value="mk">マケドニア語</option>
+                        <option value="ms">マレー語</option>
+                        <option value="mr">マラーティー語</option>
+                        <option value="mi">マオリ語</option>
+                        <option value="ne">ネパール語</option>
+                        <option value="no">ノルウェー語</option>
+                        <option value="fa">ペルシャ語</option>
+                        <option value="pl">ポーランド語</option>
+                        <option value="pt">ポルトガル語</option>
+                        <option value="ro">ルーマニア語</option>
+                        <option value="ru">ロシア語</option>
+                        <option value="sr">セルビア語</option>
+                        <option value="sk">スロバキア語</option>
+                        <option value="sl">スロベニア語</option>
+                        <option value="sw">スワヒリ語</option>
+                        <option value="sv">スウェーデン語</option>
+                        <option value="tl">タガログ語</option>
+                        <option value="ta">タミル語</option>
+                        <option value="th">タイ語</option>
+                        <option value="tr">トルコ語</option>
+                        <option value="uk">ウクライナ語</option>
+                        <option value="ur">ウルドゥー語</option>
+                        <option value="vi">ベトナム語</option>
+                        <option value="cy">ウェールズ語</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="intervalSelect" class="block text-sm font-medium text-gray-700 mb-1">録音間隔（秒）</label>
+                    <select id="intervalSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-200">
+                        <option value="3">3秒（リアルタイム性重視）</option>
+                        <option value="4" selected>4秒（バランス）</option>
+                        <option value="10">10秒（精度重視）</option>
+                        <option value="15">15秒（高精度）</option>
+                        <option value="20">20秒（最高精度）</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="micModeSelect" class="block text-sm font-medium text-gray-700 mb-1">マイクモード</label>
+                    <select id="micModeSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-200">
+                        <option value="off">オフ</option>
+                        <option value="always_on">常時オン</option>
+                        <option value="push_to_talk">プッシュトゥトーク</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center pt-2">
+                    <input id="translationCheckbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:bg-gray-300">
+                    <label for="translationCheckbox" id="translationLabel" class="ml-2 block text-sm text-gray-900">日本語へ翻訳する</label>
+                </div>
+
+                <div id="pushToTalkContainer" class="hidden text-center">
+                    <button id="pushToTalkButton" class="w-full px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg shadow-md transition-all duration-150 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        押して話す 🎙️
+                    </button>
+                    <p id="micStatus" class="text-xs text-gray-500 mt-2"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="startButton" class="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-all transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none">
+                        開始
+                    </button>
+                    <button id="stopButton" disabled class="w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        停止
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-4 border-b pb-6">
+                <h2 class="text-lg font-semibold text-gray-800">ファイルから文字起こし</h2>
+                 <div>
+                    <label for="audioFileInput" class="block text-sm font-medium text-gray-700 mb-1">音声ファイルを選択 (.mp3, .wav)</label>
+                    <input type="file" id="audioFileInput" accept=".mp3,.wav" class="w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100
+                    "/>
+                </div>
+                <button id="transcribeFileButton" class="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    ファイルを文字起こし
+                </button>
+            </div>
+            <div id="status" class="flex items-center justify-center text-gray-600 py-2">
+                <span class="status-dot bg-gray-400"></span>
+                <span>待機中</span>
+            </div>
+
+            <div class="border-t pt-6 space-y-4">
+                <div class="text-center">
+                    <button id="summarizeButton" disabled class="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        この内容を要約する ✨
+                    </button>
+                </div>
+                <div id="summaryContainer" class="hidden">
+                    <h2 class="text-lg font-bold text-gray-800 mb-2">会議の要約</h2>
+                    <div id="summaryResult" class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 min-h-[100px] whitespace-pre-wrap text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-2/3 p-6 flex flex-col bg-gray-100">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex-shrink-0">文字起こし結果</h2>
+            <div id="transcriptContainer" class="flex-grow bg-white p-4 border rounded-lg overflow-y-auto shadow-inner">
+                <p id="transcript" class="text-gray-800 whitespace-pre-wrap"></p>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    const statusDiv = document.getElementById('status');
+    const transcriptContainer = document.getElementById('transcriptContainer');
+    const transcriptDiv = document.getElementById('transcript');
+    const intervalSelect = document.getElementById('intervalSelect');
+    const languageSelect = document.getElementById('languageSelect');
+    const micModeSelect = document.getElementById('micModeSelect');
+    const translationCheckbox = document.getElementById('translationCheckbox');
+    const translationLabel = document.getElementById('translationLabel');
+    const pushToTalkContainer = document.getElementById('pushToTalkContainer');
+    const pushToTalkButton = document.getElementById('pushToTalkButton');
+    const micStatus = document.getElementById('micStatus');
+    const summarizeButton = document.getElementById('summarizeButton');
+    const summaryContainer = document.getElementById('summaryContainer');
+    const summaryResult = document.getElementById('summaryResult');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const transcribeFileButton = document.getElementById('transcribeFileButton');
+
+    let stream;
+    let recordingMimeType = '';
+    let isRecording = false; 
+    let recordingInterval = 4000; 
+    let isPushToTalkMouseDown = false; 
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    
+    const langToBcp47 = {
+        'af': 'af-ZA', 'ar': 'ar-SA', 'hy': 'hy-AM', 'az': 'az-AZ', 'be': 'be-BY', 'bs': 'bs-BA',
+        'bg': 'bg-BG', 'ca': 'ca-ES', 'zh': 'cmn-Hans-CN', 'hr': 'hr-HR', 'cs': 'cs-CZ', 'da': 'da-DK',
+        'nl': 'nl-NL', 'en': 'en-US', 'et': 'et-EE', 'fi': 'fi-FI', 'fr': 'fr-FR', 'gl': 'gl-ES',
+        'de': 'de-DE', 'el': 'el-GR', 'he': 'he-IL', 'hi': 'hi-IN', 'hu': 'hu-HU', 'is': 'is-IS',
+        'id': 'id-ID', 'it': 'it-IT', 'ja': 'ja-JP', 'kn': 'kn-IN', 'kk': 'kk-KZ', 'ko': 'ko-KR',
+        'lv': 'lv-LV', 'lt': 'lt-LT', 'mk': 'mk-MK', 'ms': 'ms-MY', 'mr': 'mr-IN', 'mi': 'mi-NZ',
+        'ne': 'ne-NP', 'no': 'no-NO', 'fa': 'fa-IR', 'pl': 'pl-PL', 'pt': 'pt-BR', 'ro': 'ro-RO',
+        'ru': 'ru-RU', 'sr': 'sr-RS', 'sk': 'sk-SK', 'sl': 'sl-SI', 'es': 'es-ES', 'sw': 'sw-TZ',
+        'sv': 'sv-SE', 'tl': 'tl-PH', 'ta': 'ta-IN', 'th': 'th-TH', 'tr': 'tr-TR', 'uk': 'uk-UA',
+        'ur': 'ur-PK', 'vi': 'vi-VN', 'cy': 'cy-GB'
+    };
+    
+    // --- Core Functions ---
+
+    async function checkBrowser() {
+        if (navigator.brave && await navigator.brave.isBrave()) {
+            alert('現在Braveブラウザでご覧になっています。マイク機能など、一部の機能がBraveのプライバシー保護機能（Shields）によって制限されることがあります。\n\n最適な体験のために、Chrome/Edge/Safariへの切り替えを推奨します。');
+            return; 
+        }
+        const userAgent = navigator.userAgent;
+        if (!userAgent.includes("Chrome") && !userAgent.includes("Edg") && !userAgent.includes("Safari") || userAgent.includes("Brave")) {
+            alert('警告: このアプリケーションは、Chrome, Edge, Safariでの利用に最適化されています。お使いのブラウザでは、一部機能が正常に動作しない可能性があります。');
+        }
+    }
+    
+    function scrollToBottom() {
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+    }
+
+    function updateStatus(text, color) {
+        statusDiv.innerHTML = `<span class="status-dot bg-${color}-500"></span><span>${text}</span>`;
+    }
+    
+    function createTimestamp() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    function setupSpeechRecognition() {
+        if (!SpeechRecognition) {
+            micModeSelect.disabled = true;
+            micModeSelect.innerHTML = '<option>お使いのブラウザは非対応です</option>';
+            return;
+        }
+        recognition = new SpeechRecognition();
+        const selectedLangCode = languageSelect.value;
+        recognition.lang = langToBcp47[selectedLangCode] || selectedLangCode;
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        recognition.onstart = () => micStatus.textContent = 'マイクを認識中です...';
+        
+        recognition.onresult = async (event) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+            }
+            
+            if (finalTranscript) {
+                const transcriptText = finalTranscript.trim();
+                const originalTextLine = `[マイク]: ${transcriptText}\n`;
+                transcriptDiv.textContent += originalTextLine;
+                scrollToBottom();
+
+                if (translationCheckbox.checked && languageSelect.value !== 'ja') {
+                    const translatedText = await translateToJapanese(transcriptText);
+                    const translatedTextLine = `  └ (訳): ${translatedText.trim()}\n`;
+                    transcriptDiv.textContent += translatedTextLine;
+                    scrollToBottom();
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech Recognition Error', event);
+            micStatus.textContent = `マイクエラー: ${event.error}`;
+            isPushToTalkMouseDown = false;
+        };
+        recognition.onend = () => {
+            if (isPushToTalkMouseDown) {
+                try { recognition.start(); } catch(e) { console.error("Could not restart recognition", e); micStatus.textContent = ''; isPushToTalkMouseDown = false; }
+                return; 
+            }
+            if (isRecording && micModeSelect.value === 'always_on') {
+                micStatus.textContent = 'マイク接続が切れました。1秒後に再接続します。';
+                setTimeout(() => {
+                    if (isRecording && micModeSelect.value === 'always_on') {
+                        try { micStatus.textContent = 'マイクを再起動しています...'; recognition.start(); } catch(e) { console.error("Could not restart recognition", e); }
+                    }
+                }, 1000);
+            } else {
+                 micStatus.textContent = '';
+            }
+        };
+    }
+    
+    function updateMicControls() {
+        const selectedMode = micModeSelect.value;
+        pushToTalkContainer.classList.toggle('hidden', selectedMode !== 'push_to_talk');
+        pushToTalkButton.disabled = selectedMode !== 'push_to_talk';
+        if(selectedMode === 'off' && recognition) {
+            isPushToTalkMouseDown = false;
+            recognition.stop();
+        }
+    }
+
+    function updateTranslationCheckboxState() {
+        const isJapanese = languageSelect.value === 'ja';
+        translationCheckbox.disabled = isJapanese;
+        translationLabel.classList.toggle('text-gray-400', isJapanese);
+        if (isJapanese) {
+            translationCheckbox.checked = false;
+        }
+    }
+
+    (async () => {
+        await checkBrowser();
+        setupSpeechRecognition();
+        updateMicControls();
+        updateTranslationCheckboxState();
+    })();
+
+    async function startTranscription() {
+        if (isRecording) return;
+        if (sessionApiKey.startsWith('sk-xxx')) {
+            alert('APIキーがコードに設定されていません。htmlファイルの先頭にあるsessionApiKey変数をあなたのキーに置き換えてください。');
+            return;
+        }
+        recordingInterval = parseInt(intervalSelect.value, 10) * 1000;
+        updateStatus('ユーザーに許可を求めています...', 'yellow');
+        try {
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { channelCount: 1, sampleRate: 16000 } });
+            if (stream.getAudioTracks().length === 0) {
+                updateStatus('エラー: 音声トラックが取得できませんでした。', 'red');
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
+            recordingMimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type));
+            if (!recordingMimeType) {
+                updateStatus('エラー: 対応する音声形式を録音できません。', 'red');
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
+            isRecording = true;
+            transcriptDiv.textContent = `--- 文字起こし開始: ${createTimestamp()} ---\n\n`;
+            summaryContainer.classList.add('hidden');
+            summaryResult.textContent = '';
+            [startButton, intervalSelect, languageSelect, micModeSelect, transcribeFileButton, translationCheckbox].forEach(el => el.disabled = true);
+            stopButton.disabled = false;
+            summarizeButton.disabled = true;
+            if (micModeSelect.value === 'always_on' && recognition) {
+                try { recognition.start(); } catch(e) { console.error(e); }
+            }
+            processChunk(new MediaStream(stream.getAudioTracks()));
+        } catch (error) {
+            console.error('Error starting transcription:', error);
+            updateStatus(`エラー: ${error.message}`, 'red');
+            isRecording = false;
+            [startButton, intervalSelect, languageSelect, micModeSelect, transcribeFileButton].forEach(el => el.disabled = false);
+            updateTranslationCheckboxState();
+            updateMicControls();
+        }
+    }
+
+    function stopTranscription() {
+        isRecording = false; 
+        isPushToTalkMouseDown = false; 
+        if (recognition) recognition.stop();
+        [stopButton, summarizeButton].forEach(el => el.disabled = true);
+        [startButton, intervalSelect, languageSelect, micModeSelect, transcribeFileButton].forEach(el => el.disabled = false);
+        updateTranslationCheckboxState();
+        if (transcriptDiv.textContent.trim().length > 0) summarizeButton.disabled = false;
+        updateMicControls();
+        updateStatus('停止処理中...', 'yellow');
+    }
+
+    async function processChunk(audioStream) {
+        if (!isRecording) {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            updateStatus('停止しました', 'gray');
+            return;
+        }
+        const recorder = new MediaRecorder(audioStream, { mimeType: recordingMimeType });
+        const chunks = [];
+        recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
+        recorder.onstop = async () => {
+            if (chunks.length > 0) {
+                const audioBlob = new Blob(chunks, { type: recordingMimeType });
+                await sendToOpenAI(audioBlob, '[システム]');
+            }
+            if (isRecording) {
+                processChunk(new MediaStream(stream.getAudioTracks()));
+            } else {
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                updateStatus('停止しました', 'gray');
+            }
+        };
+        updateStatus(`${recordingInterval / 1000}秒間録音中...`, 'green');
+        recorder.start();
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, recordingInterval);
+    }
+
+    async function translateToJapanese(text) {
+        if (!sessionApiKey.startsWith('sk-')) return "[翻訳エラー: APIキーが未設定です]";
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionApiKey}` },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: 'あなたはプロの翻訳家です。以下のテキストを自然で分かりやすい日本語に翻訳してください。' },
+                        { role: 'user', content: text }
+                    ],
+                    temperature: 0.2,
+                })
+            });
+            const result = await response.json();
+            if (response.ok) {
+                return result.choices[0].message.content;
+            } else {
+                throw new Error(result.error ? result.error.message : 'Unknown API error');
+            }
+        } catch (error) {
+            console.error('Translation Error:', error);
+            return `[翻訳エラー: ${error.message}]`;
+        }
+    }
+
+    async function sendToOpenAI(audioData, prefix) {
+        if (!sessionApiKey.startsWith('sk-')) {
+            updateStatus('APIキーが設定されていません。処理を停止しました。', 'red');
+            if (isRecording) stopTranscription();
+            return;
+        }
+        updateStatus('音声データを転送・解析中...', 'yellow');
+        const formData = new FormData();
+        const fileExtension = (audioData.type) ? audioData.type.split('/')[1].split(';')[0] : 'mp3';
+        formData.append('file', audioData, `audio.${fileExtension}`);
+        formData.append('model', 'whisper-1');
+        formData.append('language', languageSelect.value);
+
+        try {
+            const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${sessionApiKey}` },
+                body: formData
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error ? result.error.message : 'Unknown API error');
+
+            const transcriptText = result.text.replace(/ご視聴ありがとうございました。?/g, '').trim();
+
+            if (transcriptText) {
+                const originalTextLine = `${prefix}: ${transcriptText}\n`;
+                transcriptDiv.textContent += originalTextLine;
+                scrollToBottom();
+
+                if (translationCheckbox.checked && languageSelect.value !== 'ja') {
+                    updateStatus('日本語へ翻訳中...', 'blue');
+                    const translatedText = await translateToJapanese(transcriptText);
+                    const translatedTextLine = `  └ (訳): ${translatedText.trim()}\n`;
+                    transcriptDiv.textContent += translatedTextLine;
+                    scrollToBottom();
+                }
+            }
+        } catch (error) {
+            console.error('Error sending to OpenAI:', error);
+            updateStatus(`APIエラー: ${error.message}`, 'red');
+            if(isRecording) stopTranscription();
+        }
+    }
+
+    async function transcribeUploadedFile() {
+        const file = audioFileInput.files[0];
+        if (!file) { alert('ファイルが選択されていません。'); return; }
+        if (!sessionApiKey.startsWith('sk-')) { alert('APIキーが設定されていません。'); return; }
+        
+        [transcribeFileButton, startButton, languageSelect, translationCheckbox].forEach(el => el.disabled = true);
+        transcribeFileButton.textContent = '処理中...';
+        summarizeButton.disabled = true;
+        
+        transcriptDiv.textContent = `--- ファイル文字起こし開始: ${createTimestamp()} ---\n\n`;
+        summaryContainer.classList.add('hidden');
+        summaryResult.textContent = '';
+        await sendToOpenAI(file, '[ファイル]');
+        updateStatus('ファイルの文字起こしが完了しました', 'green');
+
+        [transcribeFileButton, startButton, languageSelect].forEach(el => el.disabled = false);
+        updateTranslationCheckboxState();
+        transcribeFileButton.textContent = 'ファイルを文字起こし';
+        if (transcriptDiv.textContent.trim().length > 0) summarizeButton.disabled = false;
+        audioFileInput.value = ''; 
+    }
+
+    async function summarizeTranscription() {
+        const transcriptText = transcriptDiv.textContent;
+        if (!transcriptText || transcriptText.trim().length < 50) { 
+            alert('要約するには、文字起こしの内容が短すぎます。'); return;
+        }
+        summarizeButton.disabled = true;
+        summarizeButton.textContent = '要約中...';
+        summaryContainer.classList.remove('hidden');
+        summaryResult.textContent = 'AIが要約を作成しています...';
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionApiKey}` },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: 'あなたは、会議の文字起こしを要約する優秀なアシスタントです。' },
+                        { role: 'user', content: `以下の会議の文字起こしを、重要なポイントを箇条書きにして簡潔に要約してください。\n\n---\n\n${transcriptText}` }
+                    ]
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error ? result.error.message : 'Unknown API error');
+            summaryResult.textContent = result.choices[0].message.content;
+        } catch (error) {
+            console.error('Summarization Error:', error);
+            summaryResult.textContent = `要約中にエラーが発生しました: ${error.message}`;
+        } finally {
+            summarizeButton.disabled = false;
+            summarizeButton.textContent = 'この内容を要約する ✨';
+        }
+    }
+
+    // --- Event Listeners ---
+    startButton.addEventListener('click', startTranscription);
+    stopButton.addEventListener('click', stopTranscription);
+    micModeSelect.addEventListener('change', updateMicControls);
+    summarizeButton.addEventListener('click', summarizeTranscription);
+    transcribeFileButton.addEventListener('click', transcribeUploadedFile);
+    
+    languageSelect.addEventListener('change', () => {
+        if (recognition) {
+            const selectedLangCode = languageSelect.value;
+            recognition.lang = langToBcp47[selectedLangCode] || selectedLangCode;
+        }
+        updateTranslationCheckboxState();
+    });
+    
+    pushToTalkButton.addEventListener('mousedown', () => {
+        if (micModeSelect.value === 'push_to_talk' && recognition) {
+            isPushToTalkMouseDown = true; 
+            try { micStatus.textContent = 'マイク入力中...'; recognition.start(); } catch (e) { if (e.name !== 'InvalidStateError') console.error("Recognition start error:", e); }
+        }
+    });
+    pushToTalkButton.addEventListener('mouseup', () => {
+        isPushToTalkMouseDown = false; 
+        if (micModeSelect.value === 'push_to_talk' && recognition) try { recognition.stop(); } catch (e) { console.error("Recognition stop error:", e); }
+    });
+    pushToTalkButton.addEventListener('mouseleave', () => {
+        if (isPushToTalkMouseDown) {
+            isPushToTalkMouseDown = false;
+            if (micModeSelect.value === 'push_to_talk' && recognition) try { recognition.stop(); } catch (e) { console.error("Recognition stop error:", e); }
+        }
+    });
+
+</script>
+</body>
+</html>
