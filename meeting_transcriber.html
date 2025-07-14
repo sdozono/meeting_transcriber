@@ -215,6 +215,10 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
     
+    // ★★★ 変更点 ★★★
+    // 無音と判定する音量のしきい値。0.01はかなり静かなレベルを意味します。
+    const SILENCE_THRESHOLD = 0.01;
+    
     const langToBcp47 = {
         'af': 'af-ZA', 'ar': 'ar-SA', 'hy': 'hy-AM', 'az': 'az-AZ', 'be': 'be-BY', 'bs': 'bs-BA',
         'bg': 'bg-BG', 'ca': 'ca-ES', 'zh': 'cmn-Hans-CN', 'hr': 'hr-HR', 'cs': 'cs-CZ', 'da': 'da-DK',
@@ -229,6 +233,51 @@
     };
     
     // --- Core Functions ---
+
+    // ★★★ 新規追加 ★★★
+    // 音声データ(Blob)を受け取り、無音かどうかを判定する非同期関数
+    async function isSilent(blob) {
+        // AudioContextが使えないブラウザでは判定をスキップ
+        if (!window.AudioContext && !window.webkitAudioContext) {
+            console.warn("Web Audio API is not supported. Skipping silence detection.");
+            return false;
+        }
+        // AudioContextのインスタンスを作成
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+            // BlobをArrayBufferに変換
+            const arrayBuffer = await blob.arrayBuffer();
+            // データが極端に小さい場合は無音とみなす
+            if (arrayBuffer.byteLength < 1024) return true; 
+            // ArrayBufferをデコードして音声データ(AudioBuffer)に変換
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            // 最初のチャンネルのPCMデータを取得
+            const pcmData = audioBuffer.getChannelData(0);
+            
+            let sumOfSquares = 0.0;
+            for (let i = 0; i < pcmData.length; i++) {
+                sumOfSquares += pcmData[i] * pcmData[i];
+            }
+            // RMS（二乗平均平方根）を計算して、音量の大きさを算出
+            const rms = Math.sqrt(sumOfSquares / pcmData.length);
+            
+            console.log(`Audio level (RMS): ${rms}`); // デバッグ用に音量をコンソールに表示
+            
+            // 計算した音量がしきい値より小さいか判定
+            return rms < SILENCE_THRESHOLD;
+
+        } catch (e) {
+            console.error("Error during silence detection:", e);
+            // デコードエラーなどが起きた場合は、念のため音声ありと判断して処理を続行
+            return false;
+        } finally {
+            // AudioContextを閉じてリソースを解放
+            if (audioContext.state !== 'closed') {
+                await audioContext.close();
+            }
+        }
+    }
+
 
     async function checkBrowser() {
         if (navigator.brave && await navigator.brave.isBrave()) {
@@ -345,8 +394,8 @@
 
     async function startTranscription() {
         if (isRecording) return;
-        if (sessionApiKey.startsWith('sk-xxx')) {
-            alert('APIキーがコードに設定されていません。htmlファイルの先頭にあるsessionApiKey変数をあなたのキーに置き換えてください。');
+        if (!sessionApiKey.startsWith('sk-')) {
+            alert('APIキーがコードに設定されていません。sessionApiKey変数をあなたのキーに置き換えてください。');
             return;
         }
         recordingInterval = parseInt(intervalSelect.value, 10) * 1000;
@@ -406,11 +455,24 @@
         const recorder = new MediaRecorder(audioStream, { mimeType: recordingMimeType });
         const chunks = [];
         recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
+        
+        // ★★★ 変更点 ★★★
+        // 録音が停止したタイミングで無音判定を実行
         recorder.onstop = async () => {
             if (chunks.length > 0) {
                 const audioBlob = new Blob(chunks, { type: recordingMimeType });
-                await sendToOpenAI(audioBlob, '[システム]');
+                
+                // 無音判定を呼び出す
+                if (await isSilent(audioBlob)) {
+                    console.log("Silent chunk detected, skipping API call.");
+                    // ユーザーに状況を知らせる（任意）
+                    updateStatus('無音区間をスキップしました', 'gray');
+                } else {
+                    // 音声がある場合のみAPIに送信
+                    await sendToOpenAI(audioBlob, '[システム]');
+                }
             }
+            // 録音が継続中なら、次の録音プロセスを開始
             if (isRecording) {
                 processChunk(new MediaStream(stream.getAudioTracks()));
             } else {
@@ -418,6 +480,7 @@
                 updateStatus('停止しました', 'gray');
             }
         };
+
         updateStatus(`${recordingInterval / 1000}秒間録音中...`, 'green');
         recorder.start();
         setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, recordingInterval);
@@ -502,6 +565,20 @@
         [transcribeFileButton, startButton, languageSelect, translationCheckbox].forEach(el => el.disabled = true);
         transcribeFileButton.textContent = '処理中...';
         summarizeButton.disabled = true;
+
+        // ★★★ 変更点 ★★★
+        // ファイルを文字起こしする前に無音判定
+        updateStatus('ファイルの音声を分析中...', 'blue');
+        if (await isSilent(file)) {
+            alert('選択されたファイルは無音、または音声が検出されませんでした。処理を中断します。');
+            // 状態を元に戻す
+            [transcribeFileButton, startButton, languageSelect].forEach(el => el.disabled = false);
+            updateTranslationCheckboxState();
+            transcribeFileButton.textContent = 'ファイルを文字起こし';
+            audioFileInput.value = ''; // ファイル選択をリセット
+            updateStatus('待機中', 'gray');
+            return; // ここで処理を終了
+        }
         
         transcriptDiv.textContent = `--- ファイル文字起こし開始: ${createTimestamp()} ---\n\n`;
         summaryContainer.classList.add('hidden');
